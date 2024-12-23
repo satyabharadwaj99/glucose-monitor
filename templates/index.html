@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glucose Monitor Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .current-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .unit {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">Glucose Monitor Dashboard</h1>
+        
+        <div id="connection-status" class="status disconnected">
+            Connecting to server...
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Current Glucose Level</h5>
+                        <div class="current-value" id="current-glucose">--</div>
+                        <div class="unit">mg/dL</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Last Updated</h5>
+                        <div class="current-value" id="last-update" style="font-size: 1.5rem">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Glucose Level History</h5>
+                <canvas id="glucoseChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO with the current URL
+        const socket = io(window.location.origin, {
+            path: '/socket.io',
+            transports: ['websocket', 'polling']
+        });
+        
+        // Connection status handling
+        socket.on('connect', () => {
+            document.getElementById('connection-status').className = 'status connected';
+            document.getElementById('connection-status').textContent = 'Connected to server';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').className = 'status disconnected';
+            document.getElementById('connection-status').textContent = 'Disconnected from server';
+        });
+        
+        // Initialize Chart.js
+        const ctx = document.getElementById('glucoseChart').getContext('2d');
+        const glucoseChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Glucose Level (mg/dL)',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Glucose Level (mg/dL)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Handle new readings
+        socket.on('new_reading', function(data) {
+            // Update current value
+            document.getElementById('current-glucose').textContent = data.value;
+            document.getElementById('last-update').textContent = data.timestamp;
+
+            // Update chart
+            glucoseChart.data.labels.push(data.timestamp);
+            glucoseChart.data.datasets[0].data.push(data.value);
+
+            // Keep only last 20 readings in chart
+            if (glucoseChart.data.labels.length > 20) {
+                glucoseChart.data.labels.shift();
+                glucoseChart.data.datasets[0].data.shift();
+            }
+
+            glucoseChart.update();
+        });
+
+        // Fetch initial data
+        fetch('/api/glucose_data')
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    const labels = data.map(reading => reading.timestamp);
+                    const values = data.map(reading => reading.value);
+
+                    glucoseChart.data.labels = labels.slice(-20);
+                    glucoseChart.data.datasets[0].data = values.slice(-20);
+                    glucoseChart.update();
+
+                    // Update current value
+                    const lastReading = data[data.length - 1];
+                    document.getElementById('current-glucose').textContent = lastReading.value;
+                    document.getElementById('last-update').textContent = lastReading.timestamp;
+                }
+            });
+    </script>
+</body>
+</html>

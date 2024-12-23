@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Global Glucose Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f2f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .chart-container {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .current-value {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .glucose-value {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .normal { color: #28a745; }
+        .warning { color: #ffc107; }
+        .danger { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Global Glucose Monitor</h1>
+            <p>Real-time glucose monitoring dashboard</p>
+        </div>
+        
+        <div class="dashboard">
+            <div class="chart-container">
+                <canvas id="glucoseChart"></canvas>
+            </div>
+            <div class="current-value">
+                <h2>Current Glucose Level</h2>
+                <div class="glucose-value" id="currentValue">--</div>
+                <div>mg/dL</div>
+                <div class="status" id="status">Waiting for data...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Chart.js
+        const ctx = document.getElementById('glucoseChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Glucose Level (mg/dL)',
+                    data: [],
+                    borderColor: '#2196F3',
+                    tension: 0.4,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 70,
+                        max: 180,
+                        grid: {
+                            color: '#e0e0e0'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: '#e0e0e0'
+                        }
+                    }
+                }
+            }
+        });
+
+        // MQTT Setup
+        const client = new Paho.MQTT.Client(
+            "broker.hivemq.com",
+            8000,
+            "web_" + Math.random().toString(16).substr(2, 8)
+        );
+
+        client.onConnectionLost = onConnectionLost;
+        client.onMessageArrived = onMessageArrived;
+
+        // Connect to MQTT broker
+        client.connect({
+            onSuccess: onConnect,
+            useSSL: false
+        });
+
+        function onConnect() {
+            console.log("Connected to MQTT broker");
+            client.subscribe("glucose_monitor/data");
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Connection lost:", responseObject.errorMessage);
+                setTimeout(() => client.connect(), 5000);
+            }
+        }
+
+        function onMessageArrived(message) {
+            const data = JSON.parse(message.payloadString);
+            const glucose = data.glucose;
+            updateDashboard(glucose);
+        }
+
+        function updateDashboard(glucose) {
+            // Update current value
+            document.getElementById('currentValue').textContent = glucose;
+
+            // Update status
+            const status = document.getElementById('status');
+            if (glucose < 80) {
+                status.textContent = 'LOW';
+                status.className = 'status danger';
+            } else if (glucose > 150) {
+                status.textContent = 'HIGH';
+                status.className = 'status danger';
+            } else {
+                status.textContent = 'NORMAL';
+                status.className = 'status normal';
+            }
+
+            // Update chart
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            
+            chart.data.labels.push(timeStr);
+            chart.data.datasets[0].data.push(glucose);
+
+            // Keep last 20 points
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update();
+        }
+    </script>
+</body>
+</html>

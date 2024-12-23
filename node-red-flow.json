@@ -1,0 +1,132 @@
+[
+    {
+        "id": "glucose_flow",
+        "type": "tab",
+        "label": "Glucose Monitor",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "mqtt_in",
+        "type": "mqtt in",
+        "z": "glucose_flow",
+        "name": "Global Glucose Data",
+        "topic": "glucose_monitor/data",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "public_broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "x": 130,
+        "y": 120,
+        "wires": [
+            ["process_data"]
+        ]
+    },
+    {
+        "id": "public_broker",
+        "type": "mqtt-broker",
+        "name": "Public HiveMQ",
+        "broker": "broker.hivemq.com",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true
+    },
+    {
+        "id": "process_data",
+        "type": "function",
+        "z": "glucose_flow",
+        "name": "Process Data",
+        "func": "if (typeof msg.payload === 'string') {\n    msg.payload = JSON.parse(msg.payload);\n}\nif (msg.payload.glucose) {\n    msg.payload = msg.payload.glucose;\n}\nreturn msg;",
+        "outputs": 1,
+        "x": 340,
+        "y": 120,
+        "wires": [
+            ["chart", "gauge", "debug"]
+        ]
+    },
+    {
+        "id": "chart",
+        "type": "ui_chart",
+        "z": "glucose_flow",
+        "name": "Glucose History",
+        "group": "g_readings",
+        "order": 1,
+        "width": "12",
+        "height": "6",
+        "label": "Glucose Level (mg/dL)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Waiting for data...",
+        "dot": false,
+        "ymin": "70",
+        "ymax": "180",
+        "removeOlder": 1,
+        "removeOlderPoints": "50",
+        "removeOlderUnit": "3600",
+        "x": 560,
+        "y": 80,
+        "wires": [[]]
+    },
+    {
+        "id": "gauge",
+        "type": "ui_gauge",
+        "z": "glucose_flow",
+        "name": "Current Glucose",
+        "group": "g_readings",
+        "order": 2,
+        "width": "6",
+        "height": "6",
+        "gtype": "gage",
+        "title": "Current Glucose",
+        "label": "mg/dL",
+        "format": "{{value}}",
+        "min": 70,
+        "max": 180,
+        "colors": ["#ff0000", "#e6e600", "#ff0000"],
+        "seg1": "80",
+        "seg2": "150",
+        "x": 560,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "debug",
+        "type": "debug",
+        "z": "glucose_flow",
+        "name": "Debug Output",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 560,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "g_readings",
+        "type": "ui_group",
+        "name": "Readings",
+        "tab": "dashboard_tab",
+        "order": 1,
+        "disp": true,
+        "width": "12"
+    },
+    {
+        "id": "dashboard_tab",
+        "type": "ui_tab",
+        "name": "Glucose Monitor",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    }
+]
